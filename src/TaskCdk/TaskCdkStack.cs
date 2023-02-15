@@ -13,32 +13,33 @@ namespace TaskCdk
         internal TaskCdkStack(Construct scope, string id, IStackProps props = null) : base(scope, id, props)
         {
             Vpc vpc = new Vpc(this, "VPC", new VpcProps {
-                IpAddresses = IpAddresses.Cidr("10.0.1.0/16"),
-                MaxAzs = 3,
-                SubnetConfiguration = new[] { new SubnetConfiguration 
+                MaxAzs = 2,
+                SubnetConfiguration = new SubnetConfiguration[] {
+                new SubnetConfiguration
                 {
-                    }, new SubnetConfiguration {
-                        CidrMask = 24,
-                        Name = "Ingress",
-                        SubnetType = SubnetType.PUBLIC,
-                    },new SubnetConfiguration {
-                        CidrMask = 24,
-                        Name = "Application",
-                        SubnetType = SubnetType.PRIVATE_WITH_EGRESS,
-                    }, new SubnetConfiguration {
-                        CidrMask = 28,
-                        Name = "Database",
-                        SubnetType = SubnetType.PRIVATE_ISOLATED,
-                    }
+                    Name = "Application",
+                    CidrMask = 24,
+                    SubnetType = SubnetType.PRIVATE_WITH_EGRESS,
+                },
+                new SubnetConfiguration
+                {
+                    Name = "Database",
+                    CidrMask = 28,
+                    SubnetType = SubnetType.PRIVATE_WITH_EGRESS,
                 }
+            }
             });
 
-            SecurityGroup mySecurityGroup = new SecurityGroup(this, "SecurityGroup", new SecurityGroupProps 
+
+            SecurityGroup SecurityGroup = new SecurityGroup(this, "SecurityGroup", new SecurityGroupProps 
             {
                 Vpc = vpc, 
                 SecurityGroupName = "SecurityGroup",
                 AllowAllOutbound= true
             });
+
+            SecurityGroup.AddIngressRule(Peer.AnyIpv4(), Port.Tcp(80), "Allow HTTP access");
+            SecurityGroup.AddIngressRule(Peer.AnyIpv4(), Port.Tcp(443), "Allow HTTPS access");
 
 
             AutoScalingGroup autoScalingGroup =  new AutoScalingGroup(this, "ASG", new AutoScalingGroupProps
@@ -46,17 +47,16 @@ namespace TaskCdk
                 Vpc = vpc,
                 InstanceType = InstanceType.Of(InstanceClass.T2, InstanceSize.MICRO),
                 MachineImage = new AmazonLinuxImage(),
-                SecurityGroup = mySecurityGroup
+                SecurityGroup = SecurityGroup
             });
-
-            // aplication load balancer, EKS, Bastion e Banco (RDS ou Aurora)
 
             ApplicationLoadBalancer lb = new ApplicationLoadBalancer(this, "LB", new ApplicationLoadBalancerProps 
             {
                 Vpc = vpc,
-                SecurityGroup = mySecurityGroup,
+                SecurityGroup = SecurityGroup,
                 InternetFacing = true,
-                VpcSubnets = new SubnetSelection { SubnetType = SubnetType.PUBLIC }
+                LoadBalancerName = "AppLoadBalancer",
+                VpcSubnets = new SubnetSelection { SubnetType = SubnetType.PRIVATE_WITH_EGRESS }
             });
 
             ApplicationListener applicationListener = lb.AddListener("Listener", new BaseApplicationListenerProps
@@ -79,11 +79,11 @@ namespace TaskCdk
             {
                 InstanceType = new InstanceType("t2.micro"),
                 MinCapacity = 2,
-                VpcSubnets = new SubnetSelection { SubnetType = SubnetType.PUBLIC }
+                VpcSubnets = new SubnetSelection { SubnetType = SubnetType.PRIVATE_WITH_EGRESS }
             });
 
 
-            DatabaseCluster databaseCluster = new DatabaseCluster(this, "Database", new DatabaseClusterProps
+            new DatabaseCluster(this, "Database", new DatabaseClusterProps
             {
                 Engine = DatabaseClusterEngine.AuroraMysql(new AuroraMysqlClusterEngineProps
                 {
@@ -96,15 +96,27 @@ namespace TaskCdk
                     VpcSubnets = new SubnetSelection { SubnetType = SubnetType.PRIVATE_WITH_EGRESS, SubnetGroupName = "Database" },
                     Vpc = vpc
                 },
-                
+
+                DefaultDatabaseName = "database",
             });
 
+            var bastionSecurityGroup = new SecurityGroup(this, "BastionSecurityGroup", new SecurityGroupProps
+            {
+                Vpc = vpc,
+                SecurityGroupName = "Bastion Security Group",
+                AllowAllOutbound = true
+            });
 
-            BastionHostLinux bastionHostLinux = new BastionHostLinux(this, "BastionHost", new BastionHostLinuxProps 
+            bastionSecurityGroup.AddIngressRule(Peer.AnyIpv4(), Port.Tcp(22), "Allow SSH access from anywhere");
+
+            new BastionHostLinux(this, "BastionHost", new BastionHostLinuxProps 
             { 
                 Vpc = vpc,
+                SubnetSelection = new SubnetSelection { SubnetType = SubnetType.PRIVATE_WITH_EGRESS },
+                InstanceType = new InstanceType("t2.micro"),
+                MachineImage = new AmazonLinuxImage(),
+                SecurityGroup = bastionSecurityGroup,
             });
-
 
         }
     }
