@@ -118,8 +118,8 @@ namespace TaskCdk
             {
                 Vpc = vpc,
                 Port = 1433,
-                VpcSubnets = new SubnetSelection { SubnetType = SubnetType.PRIVATE_WITH_EGRESS, SubnetGroupName = "Database" },
-                InstanceType = new InstanceType("db.t3.micro"),
+                VpcSubnets = new SubnetSelection { SubnetType = SubnetType.PRIVATE_WITH_EGRESS },
+                InstanceType = new InstanceType("t2.micro"),
                 InstanceIdentifier = "DBInstance",
                 Engine = DatabaseInstanceEngine.Mysql( new MySqlInstanceEngineProps
                 {
