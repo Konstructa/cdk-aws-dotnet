@@ -114,21 +114,17 @@ namespace TaskCdk
                 VpcSubnets = new SubnetSelection { SubnetType = SubnetType.PRIVATE_WITH_EGRESS }
             });
 
-            new DatabaseCluster(this, "Database", new DatabaseClusterProps
+            new DatabaseInstance(this, "DB", new DatabaseInstanceProps
             {
-                Engine = DatabaseClusterEngine.AuroraMysql(new AuroraMysqlClusterEngineProps
+                Vpc = vpc,
+                Port = 1433,
+                VpcSubnets = new SubnetSelection { SubnetType = SubnetType.PRIVATE_WITH_EGRESS, SubnetGroupName = "Database" },
+                InstanceType = new InstanceType("db.t3.micro"),
+                InstanceIdentifier = "DBInstance",
+                Engine = DatabaseInstanceEngine.Mysql( new MySqlInstanceEngineProps
                 {
-                    Version = AuroraMysqlEngineVersion.VER_2_09_2
-                }),
-
-                InstanceProps = new Amazon.CDK.AWS.RDS.InstanceProps
-                {
-                    InstanceType = new InstanceType("t2.micro"),
-                    VpcSubnets = new SubnetSelection { SubnetType = SubnetType.PRIVATE_WITH_EGRESS, SubnetGroupName = "Database" },
-                    Vpc = vpc
-                },
-
-                DefaultDatabaseName = "database",
+                    Version = MysqlEngineVersion.VER_8_0_30
+                })
             });
 
             var bastionSecurityGroup = new SecurityGroup(this, "BastionSecurityGroup", new SecurityGroupProps
